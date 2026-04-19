@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "AJ_mxVEtu9Jp42PDnJTaD"
+uri = "file://artifacts/codelearn/assets/images/icon.png"
+type = "image"
+title = "codelearn app icon"
