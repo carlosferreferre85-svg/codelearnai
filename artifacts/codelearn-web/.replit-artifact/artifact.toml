@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CodeLearn AI Web"
+version = "1.0.0"
+id = "artifacts/codelearn-web"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18629
+
+[services.development]
+run = "pnpm --filter @workspace/codelearn-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/codelearn-web", "run", "build" ]
+publicDir = "artifacts/codelearn-web/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18629"
+BASE_PATH = "/"
