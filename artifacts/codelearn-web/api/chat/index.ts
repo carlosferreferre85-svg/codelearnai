@@ -3,33 +3,39 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-const SYSTEM_PROMPT = `Eres CodeLearn AI, un asistente experto en programación y diseño web en español. 
-Tu misión es enseñar a personas sin experiencia a programar, crear webs y lanzarlas online gratis.
-
+const SYSTEM_PROMPT = `Eres CodeLearn AI, un asistente experto en programacion y diseno web en espanol.
+Tu mision es ensenar a personas sin experiencia a programar, crear webs y lanzarlas online gratis.
 Reglas:
-- Responde siempre en español
-- Usa explicaciones claras y ejemplos de código cuando sea útil
-- Guía paso a paso, sin saltarte pasos
-- Si muestras código, usa bloques de código con triple backtick e indica el lenguaje
-- Sé amable, motivador y paciente
-- Cubre: HTML, CSS, JavaScript, diseño web, GitHub Pages, Netlify, Vercel, herramientas IA
-- Cuando alguien tenga un error, ayúdale a resolverlo paso a paso`;
+- Responde siempre en espanol
+- Usa explicaciones claras y ejemplos de codigo cuando sea util
+- Guia paso a paso, sin saltarte pasos
+- Si muestras codigo, usa bloques de codigo con triple backtick e indica el lenguaje
+- Se amable, motivador y paciente`;
 
-const CODE_GEN_SYSTEM_PROMPT = `Eres CodeLearn AI, un generador experto de código web listo para copiar y pegar.
-Tu misión: generar código HTML, CSS y/o JavaScript completo, funcional y bien comentado en español.
-
+const CODE_GEN_PROMPT = `Eres CodeLearn AI, un generador experto de codigo web listo para copiar y pegar.
+Genera codigo HTML, CSS y/o JavaScript completo, funcional y bien comentado en espanol.
 Reglas:
-- Responde siempre en español
-- Genera código completo y funcional, listo para copiar y pegar
-- Incluye todos los archivos necesarios en bloques separados
-- Comenta el código en español
-- Usa buenas prácticas y código moderno`;
+- Responde siempre en espanol
+- Genera codigo completo y funcional, listo para copiar y pegar
+- Comenta el codigo en espanol
+- Usa buenas practicas y codigo moderno`;
+
+interface Message {
+  role: string;
+  content: string;
+}
+
+interface RequestBody {
+  messages?: Message[];
+  codeMode?: boolean;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(204).end();
   }
 
@@ -42,16 +48,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "GROQ_API_KEY not configured" });
   }
 
-  const { messages, codeMode } = req.body as {
-    messages: Array<{ role: string; content: string }>;
-    codeMode?: boolean;
-  };
+  const body = req.body as RequestBody;
+  const messages = body.messages;
+  const codeMode = body.codeMode ?? false;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: "messages array is required" });
   }
 
-  const systemPrompt = codeMode ? CODE_GEN_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const systemPrompt = codeMode ? CODE_GEN_PROMPT : SYSTEM_PROMPT;
   const allMessages = [{ role: "system", content: systemPrompt }, ...messages.slice(-20)];
 
   try {
@@ -78,7 +83,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("Access-Control-Allow-Origin", "*");
 
     const reader = groqRes.body!.getReader();
     const decoder = new TextDecoder();
@@ -90,9 +94,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.write(chunk);
     }
 
-    res.end();
-  } catch (err) {
-    console.error("Error proxying Groq request:", err);
+    return res.end();
+  } catch (_err) {
     return res.status(500).json({ error: "Internal server error" });
   }
 }
