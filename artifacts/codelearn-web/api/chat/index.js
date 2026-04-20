@@ -1,5 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
@@ -20,41 +18,19 @@ Reglas:
 - Comenta el codigo en espanol
 - Usa buenas practicas y codigo moderno`;
 
-interface Message {
-  role: string;
-  content: string;
-}
-
-interface RequestBody {
-  messages?: Message[];
-  codeMode?: boolean;
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
 
-  const groqApiKey = process.env["GROQ_API_KEY"];
-  if (!groqApiKey) {
-    return res.status(500).json({ error: "GROQ_API_KEY not configured" });
-  }
-
-  const body = req.body as RequestBody;
-  const messages = body.messages;
-  const codeMode = body.codeMode ?? false;
-
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: "messages array is required" });
-  }
+  const { messages, codeMode } = req.body || {};
+  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: "messages array is required" });
 
   const systemPrompt = codeMode ? CODE_GEN_PROMPT : SYSTEM_PROMPT;
   const allMessages = [{ role: "system", content: systemPrompt }, ...messages.slice(-20)];
@@ -62,17 +38,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const groqRes = await fetch(GROQ_API_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: allMessages,
-        stream: true,
-        max_tokens: 2048,
-        temperature: codeMode ? 0.3 : 0.7,
-      }),
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: GROQ_MODEL, messages: allMessages, stream: true, max_tokens: 2048, temperature: codeMode ? 0.3 : 0.7 }),
     });
 
     if (!groqRes.ok) {
@@ -84,16 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const reader = groqRes.body!.getReader();
+    const reader = groqRes.body.getReader();
     const decoder = new TextDecoder();
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      res.write(chunk);
+      res.write(decoder.decode(value, { stream: true }));
     }
-
     return res.end();
   } catch (_err) {
     return res.status(500).json({ error: "Internal server error" });

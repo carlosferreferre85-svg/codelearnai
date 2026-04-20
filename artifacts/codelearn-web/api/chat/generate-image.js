@@ -1,17 +1,9 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-function generateFallbackSvg(concept: string): string {
-  const escaped = concept.replace(/[<>&'"]/g, (c: string) => {
-    const map: Record<string, string> = {
-      "<": "&lt;",
-      ">": "&gt;",
-      "&": "&amp;",
-      "'": "&#39;",
-      '"': "&quot;",
-    };
+function generateFallbackSvg(concept) {
+  const escaped = concept.replace(/[<>&'"]/g, (c) => {
+    const map = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&#39;", '"': "&quot;" };
     return map[c] ?? c;
   });
   return `<svg viewBox="0 0 800 500" width="800" height="500" xmlns="http://www.w3.org/2000/svg">
@@ -27,54 +19,29 @@ function generateFallbackSvg(concept: string): string {
 </svg>`;
 }
 
-interface GroqResponse {
-  choices: Array<{ message: { content: string } }>;
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
 
-  const groqApiKey = process.env["GROQ_API_KEY"];
-  if (!groqApiKey) {
-    return res.status(500).json({ error: "GROQ_API_KEY not configured" });
-  }
-
-  const body = req.body as { concept?: string };
-  const concept = body.concept;
-
-  if (!concept) {
-    return res.status(400).json({ error: "concept is required" });
-  }
+  const { concept } = req.body || {};
+  if (!concept) return res.status(400).json({ error: "concept is required" });
 
   try {
     const groqRes = await fetch(GROQ_API_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: [
-          {
-            role: "system",
-            content:
-              "Genera diagramas SVG educativos sobre programacion web. SVG con viewBox='0 0 800 500', fondo oscuro (#0d1117), texto claro, acento verde (#00d4aa). Responde SOLO con el SVG completo.",
-          },
-          {
-            role: "user",
-            content: `Genera un diagrama SVG educativo que explique: "${concept}". Solo el SVG, nada mas.`,
-          },
+          { role: "system", content: "Genera diagramas SVG educativos sobre programacion web. SVG con viewBox='0 0 800 500', fondo oscuro (#0d1117), texto claro, acento verde (#00d4aa). Responde SOLO con el SVG completo." },
+          { role: "user", content: `Genera un diagrama SVG educativo que explique: "${concept}". Solo el SVG, nada mas.` },
         ],
         stream: false,
         max_tokens: 2000,
@@ -82,11 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
 
-    if (!groqRes.ok) {
-      return res.status(200).json({ svg: generateFallbackSvg(concept), concept });
-    }
+    if (!groqRes.ok) return res.status(200).json({ svg: generateFallbackSvg(concept), concept });
 
-    const data = (await groqRes.json()) as GroqResponse;
+    const data = await groqRes.json();
     const content = data.choices?.[0]?.message?.content ?? "";
     const svgMatch = content.match(/<svg[\s\S]*<\/svg>/i);
     const svg = svgMatch ? svgMatch[0] : generateFallbackSvg(concept);
