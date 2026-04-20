@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/chat/generate-image", "destination": "/api/chat/generate-image" },
+    { "source": "/api/chat", "destination": "/api/chat" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
