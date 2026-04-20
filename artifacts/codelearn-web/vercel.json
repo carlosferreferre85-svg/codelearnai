@@ -1,7 +1,10 @@
 {
+  "framework": "vite",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/chat/generate-image", "destination": "/api/chat/generate-image" },
     { "source": "/api/chat", "destination": "/api/chat" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
